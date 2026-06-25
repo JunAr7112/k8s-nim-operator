@@ -20,9 +20,11 @@ import (
 	"reflect"
 	"testing"
 
+	kserveconstants "github.com/kserve/kserve/pkg/constants"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -856,6 +858,65 @@ func TestGetInferenceServiceParams(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGetInferenceServiceParamsPropagatesKnativeMetadataAnnotations(t *testing.T) {
+	nimService := &NIMService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo",
+			Namespace: "nim-models",
+			Annotations: map[string]string{
+				"autoscaling.knative.dev/initial-scale":                  "1",
+				"autoscaling.knative.dev/min-scale":                      "1",
+				"autoscaling.knative.dev/max-scale":                      "5",
+				"serving.knative.dev/progress-deadline":                  "3640s",
+				"serving.knative.dev/rollout-duration":                   "90s",
+				"queue.sidecar.serving.knative.dev/cpu-resource-request": "500m",
+				"example.com/ignored":                                    "true",
+			},
+		},
+		Spec: NIMServiceSpec{
+			Image: Image{
+				Repository: "test-repo",
+				Tag:        "test-tag",
+			},
+			AuthSecret: "test-secret",
+			Annotations: map[string]string{
+				"autoscaling.knative.dev/max-scale": "7",
+			},
+			Expose: Expose{
+				Service: Service{
+					Port: ptr.To[int32](8000),
+				},
+			},
+		},
+	}
+
+	params := nimService.GetInferenceServiceParams(kserveconstants.DeploymentModeType("Knative"))
+
+	expected := map[string]string{
+		"autoscaling.knative.dev/initial-scale":                  "1",
+		"autoscaling.knative.dev/min-scale":                      "1",
+		"autoscaling.knative.dev/max-scale":                      "7",
+		"serving.knative.dev/progress-deadline":                  "3640s",
+		"serving.knative.dev/rollout-duration":                   "90s",
+		"queue.sidecar.serving.knative.dev/cpu-resource-request": "500m",
+	}
+	for key, value := range expected {
+		if params.Annotations[key] != value {
+			t.Errorf("params.Annotations[%q] = %q, want %q", key, params.Annotations[key], value)
+		}
+		if params.PodAnnotations[key] != value {
+			t.Errorf("params.PodAnnotations[%q] = %q, want %q", key, params.PodAnnotations[key], value)
+		}
+	}
+
+	if _, ok := params.Annotations["example.com/ignored"]; ok {
+		t.Errorf("unexpected unrelated metadata annotation propagated to InferenceService annotations")
+	}
+	if _, ok := params.PodAnnotations["example.com/ignored"]; ok {
+		t.Errorf("unexpected unrelated metadata annotation propagated to pod annotations")
 	}
 }
 

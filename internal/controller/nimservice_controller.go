@@ -293,8 +293,9 @@ func (r *NIMServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 							return true
 						}
 
-						// Handle only spec updates
-						return !reflect.DeepEqual(oldNIMService.Spec, newNIMService.Spec)
+						// Handle spec updates and metadata annotation updates that may propagate to child resources.
+						return !reflect.DeepEqual(oldNIMService.Spec, newNIMService.Spec) ||
+							!reflect.DeepEqual(oldNIMService.GetAnnotations(), newNIMService.GetAnnotations())
 					}
 				}
 				// For other types we watch, reconcile them
