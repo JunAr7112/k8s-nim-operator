@@ -538,7 +538,26 @@ func (n *NIMService) GetNIMServiceAnnotations() map[string]string {
 	return standardAnnotations
 }
 
-// GetServiceLabels returns merged labels to apply to NIMService-owned resources.
+// GetInferenceServiceAnnotations returns annotations to apply to KServe InferenceService resources.
+func (n *NIMService) GetInferenceServiceAnnotations() map[string]string {
+	annotations := maps.Clone(n.GetNIMServiceAnnotations())
+	for key, value := range n.GetAnnotations() {
+		if shouldPropagateMetadataAnnotationToInferenceService(key) {
+			if _, exists := annotations[key]; !exists {
+				annotations[key] = value
+			}
+		}
+	}
+	return annotations
+}
+
+func shouldPropagateMetadataAnnotationToInferenceService(key string) bool {
+	return strings.HasPrefix(key, "autoscaling.knative.dev/") ||
+		strings.HasPrefix(key, "serving.knative.dev/") ||
+		strings.HasPrefix(key, "queue.sidecar.serving.knative.dev/")
+}
+
+// GetServiceLabels returns merged labels to apply to the NIMService instance.
 func (n *NIMService) GetServiceLabels() map[string]string {
 	standardLabels := n.GetStandardLabels()
 
@@ -1768,8 +1787,8 @@ func (n *NIMService) GetInferenceServiceParams(
 	params.Name = n.GetName()
 	params.Namespace = n.GetNamespace()
 	params.Labels = n.GetServiceLabels()
-	params.Annotations = n.GetNIMServiceAnnotations()
-	params.PodAnnotations = n.GetNIMServiceAnnotations()
+	params.Annotations = n.GetInferenceServiceAnnotations()
+	params.PodAnnotations = n.GetInferenceServiceAnnotations()
 	delete(params.PodAnnotations, utils.NvidiaAnnotationParentSpecHashKey)
 
 	// Set template spec
