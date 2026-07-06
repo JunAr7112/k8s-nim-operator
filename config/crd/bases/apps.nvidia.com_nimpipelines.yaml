@@ -1043,6 +1043,7 @@ spec:
                               - Active
                               type: string
                             enabled:
+                              default: true
                               description: Enabled activates the confidential containers
                                 deployment path.
                               type: boolean
@@ -1145,7 +1146,6 @@ spec:
                               type: string
                           required:
                           - enabled
-                          - initData
                           - model
                           - sealedAuthSecret
                           type: object
@@ -1155,7 +1155,8 @@ spec:
                             rule: '!self.enabled || self.sealedAuthSecret != ""'
                           - message: initData.url is required when confidential containers
                               is enabled
-                            rule: '!self.enabled || self.initData.url != ""'
+                            rule: '!self.enabled || (has(self.initData) && self.initData.url
+                              != "")'
                         draResources:
                           description: DRAResources is the list of DRA resource claims
                             to be used for the NIMService deployment or leader worker
