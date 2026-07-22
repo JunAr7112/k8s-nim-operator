@@ -42,8 +42,24 @@ import (
 	appsv1alpha1 "github.com/NVIDIA/k8s-nim-operator/api/apps/v1alpha1"
 	"github.com/NVIDIA/k8s-nim-operator/internal/k8sutil"
 	nimparserv1 "github.com/NVIDIA/k8s-nim-operator/internal/nimparser/v1"
+	"github.com/NVIDIA/k8s-nim-operator/internal/nimsource"
 	"github.com/NVIDIA/k8s-nim-operator/internal/shared"
 )
+
+type legacyProtocolResolver struct{}
+
+func (legacyProtocolResolver) Resolve(context.Context, string, string, []string) (nimsource.Protocol, error) {
+	return nimsource.Legacy, nil
+}
+
+type fixedProtocolResolver struct {
+	protocol nimsource.Protocol
+	err      error
+}
+
+func (f fixedProtocolResolver) Resolve(context.Context, string, string, []string) (nimsource.Protocol, error) {
+	return f.protocol, f.err
+}
 
 var _ = Describe("NIMCache Controller", func() {
 	var (
@@ -64,9 +80,10 @@ var _ = Describe("NIMCache Controller", func() {
 			WithStatusSubresource(&corev1.ConfigMap{}).
 			Build()
 		reconciler = &NIMCacheReconciler{
-			Client:   cli,
-			scheme:   scheme,
-			recorder: record.NewFakeRecorder(1000),
+			Client:                cli,
+			scheme:                scheme,
+			recorder:              record.NewFakeRecorder(1000),
+			imageProtocolResolver: &legacyProtocolResolver{},
 		}
 
 		nimCache := &appsv1alpha1.NIMCache{

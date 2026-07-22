@@ -54,6 +54,7 @@ import (
 	"github.com/NVIDIA/k8s-nim-operator/internal/conditions"
 	"github.com/NVIDIA/k8s-nim-operator/internal/k8sutil"
 	"github.com/NVIDIA/k8s-nim-operator/internal/nimmodels"
+	"github.com/NVIDIA/k8s-nim-operator/internal/nimsource"
 	"github.com/NVIDIA/k8s-nim-operator/internal/render"
 	rendertypes "github.com/NVIDIA/k8s-nim-operator/internal/render/types"
 	"github.com/NVIDIA/k8s-nim-operator/internal/shared"
@@ -538,7 +539,13 @@ func (r *NIMServiceReconciler) reconcileNIMService(ctx context.Context, nimServi
 		deploymentParams := nimService.GetDeploymentParams()
 		deploymentParams.OrchestratorType = string(r.GetOrchestratorType())
 		deploymentParams.PodResourceClaims = namedDraResources.GetPodResourceClaims()
-		if nimCache.IsUniversalNIM() {
+
+		modelLayout, err := nimsource.ResolveModelLayout(ctx, r.imageProtocolResolver, nimService, &nimCache)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if nimCache.IsUniversalNIM() && !modelLayout.Protocol.IsNative() {
 			hfUri := nimCache.GetHFUri()
 			deploymentParams.Env = utils.MergeEnvVars([]corev1.EnvVar{{
 				Name:  "NIM_MODEL_NAME",
@@ -550,6 +557,18 @@ func (r *NIMServiceReconciler) reconcileNIMService(ctx context.Context, nimServi
 				Name:  "NIM_MODEL_PATH",
 				Value: hfUri,
 			}}, deploymentParams.Env)
+		}
+
+		// Native (NIMCraft) single-model NIMs read their weights from a
+		// per-instance directory under /model so multiple NIMs can share one PVC.
+		// This must match NIM_ENGINE_MODEL_PATH used by the NIMCache caching job.
+		// It is operator-owned (merged as the winning side) since it is tied to
+		// the mounted volume layout.
+		if modelLayout.Protocol.IsNative() {
+			deploymentParams.Env = utils.MergeEnvVars(deploymentParams.Env, []corev1.EnvVar{{
+				Name:  "NIM_ENGINE_MODEL_PATH",
+				Value: nimsource.NativeModelPathForCache(&nimCache),
+			}})
 		}
 
 		// If NIMCache or NIMService is a Hugging Face Multi-LLM NIM, add the HF_TOKEN to the environment variables and make NGC_API_KEY optional
@@ -583,9 +602,15 @@ func (r *NIMServiceReconciler) reconcileNIMService(ctx context.Context, nimServi
 			})
 		}
 
-		// Setup volume mounts with model store
+		// Setup volume mounts with model store. Native (NIMCraft) single-model
+		// NIMs mount the model store PVC at /model and /opt/cache instead of
+		// /model-store, so weights and compiled CUDA kernels persist across restarts.
 		deploymentParams.Volumes = nimService.GetVolumes(modelPVC)
-		deploymentParams.VolumeMounts = nimService.GetVolumeMounts(modelPVC)
+		if modelLayout.Protocol.IsNative() {
+			deploymentParams.VolumeMounts = nimService.GetNativeVolumeMounts(modelPVC)
+		} else {
+			deploymentParams.VolumeMounts = nimService.GetVolumeMounts(modelPVC)
+		}
 		if profileEnv != nil {
 			deploymentParams.Env = utils.MergeEnvVars(*profileEnv, deploymentParams.Env)
 		}
@@ -593,7 +618,12 @@ func (r *NIMServiceReconciler) reconcileNIMService(ctx context.Context, nimServi
 		if gpuResources != nil {
 			deploymentParams.Resources = gpuResources
 		}
-		initContainerVolumeMounts := nimService.GetInitContainerVolumeMounts(modelPVC)
+		var initContainerVolumeMounts []corev1.VolumeMount
+		if modelLayout.Protocol.IsNative() {
+			initContainerVolumeMounts = nimService.GetNativeInitContainerVolumeMounts(modelPVC)
+		} else {
+			initContainerVolumeMounts = nimService.GetInitContainerVolumeMounts(modelPVC)
+		}
 		for idx := range deploymentParams.InitContainers {
 			deploymentParams.InitContainers[idx].VolumeMounts = initContainerVolumeMounts
 		}
