@@ -447,10 +447,11 @@ func validateAuthSecret(authSecret *string, fldPath *field.Path) (admission.Warn
 	warningList := admission.Warnings{}
 	errList := field.ErrorList{}
 	// AuthSecret is optional for air-gapped deployments that serve a pre-cached
-	// model from local storage. Warn so users do not omit it unintentionally
-	// when they still need NGC/HF credentials for model download.
+	// model from local storage, and for feature-branch / non-PB NIMs that do not
+	// require NGC_API_KEY. Warn so users check the NIM specs when credentials
+	// are omitted.
 	if authSecret == nil || *authSecret == "" {
-		warningList = append(warningList, fmt.Sprintf("%s is empty: NGC_API_KEY will not be injected. Omit this only for air-gapped deployments with a pre-populated local model cache", fldPath.String()))
+		warningList = append(warningList, fmt.Sprintf("%s is empty: %s", fldPath.String(), appsv1alpha1.NGCAPIKeyUnsetWarning))
 	}
 	return warningList, errList
 }

@@ -143,6 +143,10 @@ func (r *NIMCacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger.Info("Reconciling", "NIMCache", nimCache.Name)
 	previousStatusState := nimCache.Status.State
 
+	if nimCache.Spec.Source.NGC != nil {
+		conditions.WarnIfNGCAPIKeyUnset(ctx, r.GetEventRecorder(), nimCache, nimCache.Spec.Source.NGC.AuthSecret)
+	}
+
 	defer func() {
 		if err != nil {
 			r.GetEventRecorder().Eventf(nimCache, corev1.EventTypeWarning, "ReconcileFailed",

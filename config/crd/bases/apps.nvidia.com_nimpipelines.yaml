@@ -1021,7 +1021,9 @@ spec:
                         authSecret:
                           description: |-
                             AuthSecret is the name of an existing secret containing the NGC_API_KEY (and optionally HF_TOKEN).
-                            It is optional for air-gapped deployments that serve a pre-cached model
+                            It is optional for air-gapped deployments that serve a pre-cached model, and for feature-branch /
+                            non-PB NIMs that do not require NGC_API_KEY. When set, NGC_API_KEY is injected as an optional
+                            secret key so pods can start even if the key is absent (PB / pre-2.0.10 NIMs still need it at runtime).
                           type: string
                         command:
                           items:

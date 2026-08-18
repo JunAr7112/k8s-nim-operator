@@ -20,9 +20,12 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	k8sutil "github.com/NVIDIA/k8s-nim-operator/internal/k8sutil"
 
@@ -569,5 +572,29 @@ func IfPresentUpdateCondition(conditions *[]metav1.Condition, conditionType stri
 			// condition updated
 			return
 		}
+	}
+}
+
+// WarnIfNGCAPIKeyUnset logs and records a Warning event when no auth secret is
+// configured, so NGC_API_KEY will not be injected. Some NIM images still require
+// the key; users should check the NIM specifications for their image.
+// Optional related objects (for example Pods) also receive the same event so it
+// appears in kubectl describe for those objects.
+func WarnIfNGCAPIKeyUnset(ctx context.Context, recorder record.EventRecorder, obj client.Object, authSecret string, related ...client.Object) {
+	if authSecret != "" {
+		return
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Info(appsv1alpha1.NGCAPIKeyUnsetWarning)
+	if recorder == nil {
+		return
+	}
+	recorder.Event(obj, corev1.EventTypeWarning, appsv1alpha1.NGCAPIKeyUnsetReason, appsv1alpha1.NGCAPIKeyUnsetWarning)
+	for _, rel := range related {
+		if rel == nil {
+			continue
+		}
+		recorder.Event(rel, corev1.EventTypeWarning, appsv1alpha1.NGCAPIKeyUnsetReason, appsv1alpha1.NGCAPIKeyUnsetWarning)
 	}
 }

@@ -56,9 +56,10 @@ func validateNGCSource(ngcSource *appsv1alpha1.NGCSource, fldPath *field.Path) (
 	// Evaluate NGCSource.Model fields
 	warnList, errList := validateModel(ngcSource.Model, fldPath.Child("model"))
 
-	// Ensure AuthSecret is a non-empty string
+	// AuthSecret is optional for feature-branch / non-PB NIMs that do not need
+	// NGC_API_KEY. Warn so users check the NIM specs when credentials are omitted.
 	if ngcSource.AuthSecret == "" {
-		errList = append(errList, field.Required(fldPath.Child("authSecret"), "must be non-empty"))
+		warnList = append(warnList, fmt.Sprintf("%s is empty: %s", fldPath.Child("authSecret").String(), appsv1alpha1.NGCAPIKeyUnsetWarning))
 	}
 
 	// Ensure ModelPuller is a non-empty string

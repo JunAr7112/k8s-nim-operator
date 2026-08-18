@@ -41,6 +41,12 @@ const (
 	NGCAPIKey = "NGC_API_KEY"
 	// HFToken is the environment variable name for Hugging Face token.
 	HFToken = "HF_TOKEN"
+	// NGCAPIKeyUnsetWarning is logged/emitted when NGC credentials are not configured.
+	// Some NIM images still require NGC_API_KEY at runtime; operators cannot always
+	// detect that from the image reference alone.
+	NGCAPIKeyUnsetWarning = "NGC_API_KEY is unset. Some NIM models require an NGC API key for model download"
+	// NGCAPIKeyUnsetReason is the Kubernetes event reason for NGCAPIKeyUnsetWarning.
+	NGCAPIKeyUnsetReason = "NGCAPIKeyUnset"
 )
 
 // Expose defines attributes to expose the service.

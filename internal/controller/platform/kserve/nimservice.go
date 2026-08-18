@@ -127,6 +127,15 @@ func (r *NIMServiceReconciler) reconcileNIMService(ctx context.Context, nimServi
 		}
 	}()
 
+	var relatedPods []client.Object
+	podList := &corev1.PodList{}
+	if listErr := r.List(ctx, podList, client.InNamespace(nimService.Namespace), client.MatchingLabels(nimService.GetStandardSelectorLabels())); listErr == nil {
+		for i := range podList.Items {
+			relatedPods = append(relatedPods, &podList.Items[i])
+		}
+	}
+	conditions.WarnIfNGCAPIKeyUnset(ctx, r.recorder, nimService, nimService.Spec.AuthSecret, relatedPods...)
+
 	// Validations.
 	isValid, msg, err := r.validateDRAResources(ctx, nimService)
 	if err != nil {
